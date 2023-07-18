@@ -1278,6 +1278,56 @@ L.Control.JSDialogBuilder = L.Control.extend({
 					}
 				};
 
+				var moveFocusIntoTabPage = function(tab) {
+					function findFirstFocusableElement(currentNode) {
+						var currentChildNodes = currentNode.childNodes;
+
+						if (currentChildNodes.length <= 0) {
+							return;
+						}
+
+						for (var childIndex = 0; childIndex < currentChildNodes.length; childIndex++) {
+							var currentChildNode = currentChildNodes[childIndex];
+
+							if (currentChildNode.tagName === 'DIV') {
+								var firstFocusableElement = findFirstFocusableElement(currentChildNode);
+
+								if (firstFocusableElement !== undefined) {
+									return firstFocusableElement;
+								}
+							}
+							else if (currentChildNode.tagName === 'INPUT' || currentChildNode.tagName === 'BUTTON')
+							{
+								if (!currentChildNode.disabled && !currentChildNode.hidden && !currentChildNode.classList.contains('hidden')) {
+									return currentChildNode;
+								}
+							}
+						}
+						
+						return;
+					}
+
+					function findTabPageRootNode(startingNode) {
+						var childNodes = startingNode.childNodes;
+
+						for (var index = 0; index < childNodes.length; index++) {
+							var currentNode = childNodes[index];
+
+							if (currentNode.classList.contains('ui-tabs-content')) {
+								return currentNode;
+							}
+						}
+					}
+
+					var tabIdx = tabs.indexOf(tab);
+					var tabPageRootNode = findTabPageRootNode(tabWidgetRootContainer);
+					var startingNode = tabPageRootNode.childNodes[tabIdx];
+
+					var firstFocusableElement = findFirstFocusableElement(startingNode);
+
+					firstFocusableElement.focus();
+				};
+
 				// We are adding this to distinguish "enter" key from real click events.
 				tabs.forEach(function (tab)
 					{
@@ -1291,6 +1341,10 @@ L.Control.JSDialogBuilder = L.Control.extend({
 
 							case 'ArrowRight':
 								moveFocusToNextTab(currentTab);
+								break;
+
+							case 'ArrowDown':
+								moveFocusIntoTabPage(currentTab);
 								break;
 
 							case 'Home':
