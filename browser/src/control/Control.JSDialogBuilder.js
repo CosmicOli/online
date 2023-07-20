@@ -1279,7 +1279,7 @@ L.Control.JSDialogBuilder = L.Control.extend({
 				};
 
 				var moveFocusIntoTabPage = function(tab) {
-					function findFirstFocusableElement(currentNode) {
+					/*function findFirstFocusableElement(currentNode) {
 						var currentChildNodes = currentNode.childNodes;
 
 						if (currentChildNodes.length <= 0) {
@@ -1323,9 +1323,18 @@ L.Control.JSDialogBuilder = L.Control.extend({
 					var tabPageRootNode = findTabPageRootNode(tabWidgetRootContainer);
 					var startingNode = tabPageRootNode.childNodes[tabIdx];
 
-					var firstFocusableElement = findFirstFocusableElement(startingNode);
+					var firstFocusableElement = findFirstFocusableElement(startingNode);*/
+					
+					var tabIdx = tabs.indexOf(tab);
 
-					firstFocusableElement.focus();
+					var firstFocusableElementIdx = 0;
+					var currentElement = tabPages[tabIdx][0];
+					while (currentElement.disabled || currentElement.hidden || currentElement.classList.contains('hidden')) {
+						firstFocusableElementIdx++;
+						currentElement = tabPages[tabIdx][firstFocusableElementIdx];
+					}
+
+					currentElement.focus();
 				};
 
 				// We are adding this to distinguish "enter" key from real click events.
@@ -1393,8 +1402,6 @@ L.Control.JSDialogBuilder = L.Control.extend({
 				builder.build(contentDivs[tabId], [tab], false, false);
 				tabId++;
 			}
-
-			return false;
 		} else {
 			for (var tabIdx = 0; tabIdx < data.children.length; tabIdx++) {
 				var tab = data.children[tabIdx];
@@ -1405,9 +1412,131 @@ L.Control.JSDialogBuilder = L.Control.extend({
 				builder.build(contentDivs[singleTabId], [tab], false, false);
 				break;
 			}
-
-			return false;
 		}
+
+		function findElements(tabPagesRootNode) {
+			var tabPages = [];
+			var tabElements = [];
+
+			function findElementsInTabPage(currentNode)
+			{
+				var currentChildNodes = currentNode.childNodes;
+
+				if (currentChildNodes.length <= 0) {
+					return;
+				}
+	
+				for (var childIndex = 0; childIndex < currentChildNodes.length; childIndex++) {
+					var currentChildNode = currentChildNodes[childIndex];
+	
+					if (currentChildNode.tagName === 'DIV') {
+						findElementsInTabPage(currentChildNode);
+					}
+					else if (currentChildNode.tagName === 'INPUT' || currentChildNode.tagName === 'BUTTON' || currentChildNode.tagName === 'TEXTAREA')
+					{
+						tabElements.push(currentChildNode);
+					}
+				}
+
+				return tabElements;
+			}
+			
+			tabPagesRootNode.childNodes.forEach(function(childNode) { tabPages.push(findElementsInTabPage(childNode)); tabElements = [];});
+
+			return tabPages;
+		}
+		
+		var childNodes = tabWidgetRootContainer.childNodes;
+		var tabPageRootNode;
+		for (var index = 0; index < childNodes.length; index++) {
+			var currentNode = childNodes[index];
+
+			if (currentNode.classList.contains('ui-tabs-content')) {
+				tabPageRootNode = currentNode;
+			}
+		}
+		var tabPages = findElements(tabPageRootNode);
+
+		tabPages.forEach(function(elements)
+		{
+			elements.forEach(function(element)
+			{
+				var addKeydownEvents = function (element) {
+					element.addEventListener('keydown', function(e) {
+						//var currentElement = e.currentTarget;
+		
+						switch (e.key) {
+							case 'ArrowLeft':
+								alert('uwu');
+								break;
+	
+							case 'ArrowRight':
+								alert('uwu');
+								break;
+							
+							case 'ArrowDown':
+								alert('uwu');
+								break;
+							
+							case 'ArrowUp':
+								alert('uwu');
+								break;			
+						}
+					});
+				};
+				
+				//tabPages[tabPages.indexOf(element.parentNode)]
+				addKeydownEvents(element);
+
+				element.addEventListener('refresh', function() {
+					/*addKeydownEvents(e.detail);
+					elements[elements.indexof(element)] = e.detail;
+					elements.delete(element);*/
+
+					/*tabPages = findElements(element.parentNode);
+
+					tabPages.forEach(function(elements)
+					{
+						elements.forEach(function(element) {
+							addKeydownEvents(element);
+						});
+					});		*/
+					//tabPages[tabPages.indexOf(element.parentNode)][tabPages.indexOf(element) + 1];
+					var siblingNodes = element.parentNode.childNodes;
+
+					// .indexOf does not exist for a NodeArray.
+					var index = 0;
+					while (siblingNodes[index] !== element) {
+						index++;
+					}
+
+					var newElement = siblingNodes[index + 1];
+
+					addKeydownEvents(newElement);
+
+					//var tabIdx = tabPages.indexOf(element.parentNode);
+
+					for (var tabIdx = 0; tabIdx < tabPages.length; tabIdx++) {
+						var tabElements = tabPages[tabIdx];
+
+						var elementIdx = tabElements.indexOf(element);
+
+						if (elementIdx !== -1) {
+							break;
+						}
+					}
+
+					//var elementIdx = tabPages[tabIdx].indexOf(element);
+
+					tabPages[tabIdx][elementIdx] = newElement;
+					/*element.parentNode.childNodes.forEach(function(element) {
+						addKeydownEvents(element);
+					});*/			
+				});
+			});
+		});
+
+		return false;
 	},
 
 	_singlePanelHandler: function(parentContainer, data, builder) {
@@ -3404,6 +3533,35 @@ L.Control.JSDialogBuilder = L.Control.extend({
 		var temporaryParent = L.DomUtil.create('div');
 		buildFunc.bind(this)(temporaryParent, [data], false);
 		parent.insertBefore(temporaryParent.firstChild, control.nextSibling);
+
+		var copyEventsEvent = new Event('refresh');
+		control.dispatchEvent(copyEventsEvent);
+
+		/*var copyEventsEvent = new Event('keyDown', {detail: control.nextSibling, key:'ArrowLeft'});
+		temporaryParent.firstChild.dispatchEvent(copyEventsEvent);*/
+
+		/*temporaryParent.firstChild.addEventListener('keydown', function(e) {
+					//var currentElement = e.currentTarget;
+	
+					switch (e.key) {
+						case 'ArrowLeft':
+							alert('uwu');
+							break;
+
+						case 'ArrowRight':
+							alert('uwu');
+							break;
+						
+						case 'ArrowDown':
+							alert('uwu');
+							break;
+						
+						case 'ArrowUp':
+							alert('uwu');
+							break;			
+					}
+				});*/
+
 		var backupGridSpan = control.style.gridColumn;
 		L.DomUtil.remove(control);
 
