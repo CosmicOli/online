@@ -1293,7 +1293,7 @@ L.Control.JSDialogBuilder = L.Control.extend({
 						for (var childIndex = 0; childIndex < currentChildNodes.length; childIndex++) {
 							var currentChildNode = currentChildNodes[childIndex];
 							
-							if (currentChildNode.tagName === 'DIV' && !currentChildNode.classList.contains('has-dropdown--color')) {
+							if (currentChildNode.tabIndex === -1) {
 								var firstFocusableElement = findFirstFocusableElement(currentChildNode);
 
 								if (firstFocusableElement !== null) {
@@ -1407,7 +1407,7 @@ L.Control.JSDialogBuilder = L.Control.extend({
 					for (var childIndex = 0; childIndex < currentChildNodes.length; childIndex++) {
 						var currentChildNode = currentChildNodes[childIndex];
 						
-						if (currentChildNode.tagName === 'DIV' && !currentChildNode.classList.contains('has-dropdown--color')) {
+						if (currentChildNode.tabIndex === -1) {
 							var firstFocusableElement = traverseDown(currentChildNode);
 
 							if (firstFocusableElement !== null) {
@@ -1541,7 +1541,7 @@ L.Control.JSDialogBuilder = L.Control.extend({
 
 					addRefreshEvent(currentChildNode);
 
-					if (currentChildNode.tagName === 'DIV') {
+					if (currentChildNode.tabIndex === -1) {
 						giveChildrenEvents(currentChildNode);
 					}
 					else {
@@ -1561,7 +1561,7 @@ L.Control.JSDialogBuilder = L.Control.extend({
 
 				addRefreshEvent(newElement);
 
-				if (newElement.tagName === 'DIV') {
+				if (newElement.tabIndex === -1) {
 					giveChildrenEvents(newElement);
 				}
 				else {
@@ -1609,7 +1609,7 @@ L.Control.JSDialogBuilder = L.Control.extend({
 				for (var childIndex = 0; childIndex < currentChildNodes.length; childIndex++) {
 					var currentChildNode = currentChildNodes[childIndex];
 	
-					if (currentChildNode.tagName === 'DIV' && currentChildNode.classList.contains('has-dropdown--color')) {
+					if (currentChildNode.tabIndex === -1) {
 						addRefreshEvent(currentChildNode); // DIVs are not referenced in the tabElements array, but do need to be refreshed.
 						assignEventsToElementsInTabPage(currentChildNode);
 					}
