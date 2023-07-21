@@ -1293,20 +1293,20 @@ L.Control.JSDialogBuilder = L.Control.extend({
 						for (var childIndex = 0; childIndex < currentChildNodes.length; childIndex++) {
 							var currentChildNode = currentChildNodes[childIndex];
 							
-							if (currentChildNode.tagName === 'DIV') {
+							if (currentChildNode.tagName === 'DIV' && !currentChildNode.classList.contains('has-dropdown--color')) {
 								var firstFocusableElement = findFirstFocusableElement(currentChildNode);
 
 								if (firstFocusableElement !== null) {
 									return firstFocusableElement;
 								}
 							}
-							else if (currentChildNode.tagName === 'INPUT' || currentChildNode.tagName === 'BUTTON' || currentChildNode.tagName === 'TEXTAREA')
-							{
+							else //if (currentChildNode.tagName === 'INPUT' || currentChildNode.tagName === 'BUTTON' || currentChildNode.tagName === 'TEXTAREA')
+							//{
 								if (!currentChildNode.disabled && !currentChildNode.hidden && !currentChildNode.classList.contains('hidden'))
 								{
 									return currentChildNode;
 								}
-							}
+							//}
 						}
 
 						return null;
@@ -1407,20 +1407,20 @@ L.Control.JSDialogBuilder = L.Control.extend({
 					for (var childIndex = 0; childIndex < currentChildNodes.length; childIndex++) {
 						var currentChildNode = currentChildNodes[childIndex];
 						
-						if (currentChildNode.tagName === 'DIV') {
+						if (currentChildNode.tagName === 'DIV' && !currentChildNode.classList.contains('has-dropdown--color')) {
 							var firstFocusableElement = traverseDown(currentChildNode);
 
 							if (firstFocusableElement !== null) {
 								return firstFocusableElement;
 							}
 						}
-						else if (currentChildNode.tagName === 'INPUT' || currentChildNode.tagName === 'BUTTON' || currentChildNode.tagName === 'TEXTAREA')
-						{
+						else //if (currentChildNode.tagName === 'INPUT' || currentChildNode.tagName === 'BUTTON' || currentChildNode.tagName === 'TEXTAREA')
+						//{
 							if (!currentChildNode.disabled && !currentChildNode.hidden && !currentChildNode.classList.contains('hidden'))
 							{
 								return currentChildNode;
 							}
-						}
+						//}
 					}
 
 					return null;
@@ -1429,7 +1429,24 @@ L.Control.JSDialogBuilder = L.Control.extend({
 				var traverseUp = function(currentElement) {
 					var currentParent = currentElement.parentNode;
 					
-					if (currentParent.childNodes.length < 2) {
+					if (currentElement.classList.contains('cell')) {
+						var siblingNodes = currentParent.childNodes;
+
+						var difference = (right ? 1 : -1);
+
+						var index = 0;
+						while (siblingNodes[index] !== currentElement) {
+								index++;
+						}
+						var nextChild = siblingNodes[index + difference];
+
+						return traverseDown(nextChild);
+					}
+					else {
+						return traverseUp(currentParent);
+					}
+
+					/*if (currentParent.childNodes.length < 2) {
 						return traverseUp(currentParent); 
 					}
 					else //{
@@ -1445,7 +1462,19 @@ L.Control.JSDialogBuilder = L.Control.extend({
 							}
 							var nextChild = siblingNodes[index + difference];
 
-							return traverseDown(nextChild);
+							if (nextChild === undefined) {
+								return traverseUp(currentParent);
+							}
+
+							var nextFocusableElement = traverseDown(nextChild);
+
+							if (nextFocusableElement === null)
+							{
+								return traverseUp(currentParent);
+							}
+							else {
+								return nextFocusableElement;
+							}
 						}
 						/*else {
 							// move to next div's first element
@@ -1580,7 +1609,7 @@ L.Control.JSDialogBuilder = L.Control.extend({
 				for (var childIndex = 0; childIndex < currentChildNodes.length; childIndex++) {
 					var currentChildNode = currentChildNodes[childIndex];
 	
-					if (currentChildNode.tagName === 'DIV') {
+					if (currentChildNode.tagName === 'DIV' && currentChildNode.classList.contains('has-dropdown--color')) {
 						addRefreshEvent(currentChildNode); // DIVs are not referenced in the tabElements array, but do need to be refreshed.
 						assignEventsToElementsInTabPage(currentChildNode);
 					}
