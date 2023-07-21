@@ -1280,15 +1280,41 @@ L.Control.JSDialogBuilder = L.Control.extend({
 
 				var moveFocusIntoTabPage = function(tab) {
 					var tabIdx = tabs.indexOf(tab);
+					var currentElement = tabPages[tabIdx];
 
-					var firstFocusableElementIdx = 0;
-					var currentElement = tabPages[tabIdx][0];
-					while (currentElement.disabled || currentElement.hidden || currentElement.classList.contains('hidden')) {
-						firstFocusableElementIdx++;
-						currentElement = tabPages[tabIdx][firstFocusableElementIdx];
+					function findFirstFocusableElement(currentNode)
+					{
+						var currentChildNodes = currentNode.childNodes;
+
+						if (currentChildNodes.length <= 0) {
+							return null;
+						}
+						
+						for (var childIndex = 0; childIndex < currentChildNodes.length; childIndex++) {
+							var currentChildNode = currentChildNodes[childIndex];
+							
+							if (currentChildNode.tagName === 'DIV') {
+								var firstFocusableElement = findFirstFocusableElement(currentChildNode);
+
+								if (firstFocusableElement !== null) {
+									return firstFocusableElement;
+								}
+							}
+							else if (currentChildNode.tagName === 'INPUT' || currentChildNode.tagName === 'BUTTON' || currentChildNode.tagName === 'TEXTAREA')
+							{
+								if (!currentChildNode.disabled && !currentChildNode.hidden && !currentChildNode.classList.contains('hidden'))
+								{
+									return currentChildNode;
+								}
+							}
+						}
+
+						return null;
 					}
 
-					currentElement.focus();
+					var firstFocusableElement = findFirstFocusableElement(currentElement);
+
+					firstFocusableElement.focus();
 				};
 
 				// We are adding this to distinguish "enter" key from real click events.
@@ -1369,24 +1395,109 @@ L.Control.JSDialogBuilder = L.Control.extend({
 		}
 
 		function addKeydownEvents(element) {
+			var handleHorizontalArrow = function(currentElement, right) {
+
+				var traverseDown = function (currentElement) {
+					var currentChildNodes = currentElement.childNodes;
+					
+					if (currentChildNodes.length <= 0) {
+						return null;
+					}
+
+					for (var childIndex = 0; childIndex < currentChildNodes.length; childIndex++) {
+						var currentChildNode = currentChildNodes[childIndex];
+						
+						if (currentChildNode.tagName === 'DIV') {
+							var firstFocusableElement = traverseDown(currentChildNode);
+
+							if (firstFocusableElement !== null) {
+								return firstFocusableElement;
+							}
+						}
+						else if (currentChildNode.tagName === 'INPUT' || currentChildNode.tagName === 'BUTTON' || currentChildNode.tagName === 'TEXTAREA')
+						{
+							if (!currentChildNode.disabled && !currentChildNode.hidden && !currentChildNode.classList.contains('hidden'))
+							{
+								return currentChildNode;
+							}
+						}
+					}
+
+					return null;
+				};
+
+				var traverseUp = function(currentElement) {
+					var currentParent = currentElement.parentNode;
+					
+					if (currentParent.childNodes.length < 2) {
+						return traverseUp(currentParent); 
+					}
+					else //{
+						// change so if a down line is traversed and has no focusable elements, continue upwards and through other paths on the same level
+						if (currentParent.offsetWidth > currentParent.offsetHeight) {
+							var siblingNodes = currentParent.childNodes;
+
+							var difference = (right ? 1 : -1);
+
+							var index = 0;
+							while (siblingNodes[index] !== currentElement) {
+								index++;
+							}
+							var nextChild = siblingNodes[index + difference];
+
+							return traverseDown(nextChild);
+						}
+						/*else {
+							// move to next div's first element
+						}*/
+					//}
+				};
+
+				var firstFocusableElement = traverseUp(currentElement);
+
+				firstFocusableElement.focus();
+
+				// if "parent" offset width greater than height
+				// -> if at the end of the div
+				// -> -> move to next div's first element 
+				// else
+				// -> move to next focusable item in div as there will be a neighbour
+			};
+
+			/*var handleVerticalArrow = function(currentElement, up) {
+				var focusOnTabButton = function() {
+					// find the current tab id or idx
+					// focus on the tab button with that id/idx
+				};
+
+				// if "parent" offset height greater than width
+				// -> if at the end of the div
+				// -> -> if there is no div above
+				// -> -> -> go up to the tab buttons
+				// -> -> else
+				// -> -> -> move to next div's first element
+				// else
+				// -> move to next focusable item in div as there will be a neighbour
+			};*/
+		
 			element.addEventListener('keydown', function(e) {
-				//var currentElement = e.currentTarget;
+				var currentElement = e.currentTarget;
 
 				switch (e.key) {
 					case 'ArrowLeft':
-						alert('uwu');
+						handleHorizontalArrow(currentElement, false);
 						break;
 
 					case 'ArrowRight':
-						alert('uwu');
+						handleHorizontalArrow(currentElement, true);
 						break;
 					
 					case 'ArrowDown':
-						alert('uwu');
+						//handleVerticalArrow(currentElement, false);
 						break;
 					
 					case 'ArrowUp':
-						alert('uwu');
+						//handleVerticalArrow(currentElement, true);
 						break;			
 				}
 			});
@@ -1413,7 +1524,6 @@ L.Control.JSDialogBuilder = L.Control.extend({
 			element.addEventListener('refresh', function() {
 				var siblingNodes = element.parentNode.childNodes;
 
-				// .indexOf does not exist for a NodeArray.
 				var index = 0;
 				while (siblingNodes[index] !== element) {
 					index++;
@@ -3491,27 +3601,6 @@ L.Control.JSDialogBuilder = L.Control.extend({
 		parent.insertBefore(temporaryParent.firstChild, control.nextSibling);
 
 		var copyEventsEvent = new Event('refresh');
-
-		/*var updateElementsInDiv = function (element) {
-
-			for (var idx = 0; idx < element.childNodes.length; idx++) {
-				var currentChildElement = element.childNodes[idx];
-
-				if (currentChildElement.tagName === 'DIV') {
-					updateElementsInDiv(currentChildElement);
-				}
-				else {
-					currentChildElement.dispatchEvent(copyEventsEvent);
-				}
-			}
-		};
-
-		if (control.tagName === 'DIV') {
-			updateElementsInDiv(control);
-		}
-		else {
-			control.dispatchEvent(copyEventsEvent);
-		}*/
 		control.dispatchEvent(copyEventsEvent);
 
 		var backupGridSpan = control.style.gridColumn;
