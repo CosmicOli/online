@@ -1279,52 +1279,6 @@ L.Control.JSDialogBuilder = L.Control.extend({
 				};
 
 				var moveFocusIntoTabPage = function(tab) {
-					/*function findFirstFocusableElement(currentNode) {
-						var currentChildNodes = currentNode.childNodes;
-
-						if (currentChildNodes.length <= 0) {
-							return;
-						}
-
-						for (var childIndex = 0; childIndex < currentChildNodes.length; childIndex++) {
-							var currentChildNode = currentChildNodes[childIndex];
-
-							if (currentChildNode.tagName === 'DIV') {
-								var firstFocusableElement = findFirstFocusableElement(currentChildNode);
-
-								if (firstFocusableElement !== undefined) {
-									return firstFocusableElement;
-								}
-							}
-							else if (currentChildNode.tagName === 'INPUT' || currentChildNode.tagName === 'BUTTON')
-							{
-								if (!currentChildNode.disabled && !currentChildNode.hidden && !currentChildNode.classList.contains('hidden')) {
-									return currentChildNode;
-								}
-							}
-						}
-						
-						return;
-					}
-
-					function findTabPageRootNode(startingNode) {
-						var childNodes = startingNode.childNodes;
-
-						for (var index = 0; index < childNodes.length; index++) {
-							var currentNode = childNodes[index];
-
-							if (currentNode.classList.contains('ui-tabs-content')) {
-								return currentNode;
-							}
-						}
-					}
-
-					var tabIdx = tabs.indexOf(tab);
-					var tabPageRootNode = findTabPageRootNode(tabWidgetRootContainer);
-					var startingNode = tabPageRootNode.childNodes[tabIdx];
-
-					var firstFocusableElement = findFirstFocusableElement(startingNode);*/
-					
 					var tabIdx = tabs.indexOf(tab);
 
 					var firstFocusableElementIdx = 0;
@@ -1414,15 +1368,98 @@ L.Control.JSDialogBuilder = L.Control.extend({
 			}
 		}
 
+		function addKeydownEvents(element) {
+			element.addEventListener('keydown', function(e) {
+				//var currentElement = e.currentTarget;
+
+				switch (e.key) {
+					case 'ArrowLeft':
+						alert('uwu');
+						break;
+
+					case 'ArrowRight':
+						alert('uwu');
+						break;
+					
+					case 'ArrowDown':
+						alert('uwu');
+						break;
+					
+					case 'ArrowUp':
+						alert('uwu');
+						break;			
+				}
+			});
+		}
+
+		function addRefreshEvent(element) {
+			element.addEventListener('refresh', function() {
+				var siblingNodes = element.parentNode.childNodes;
+
+				// .indexOf does not exist for a NodeArray.
+				var index = 0;
+				while (siblingNodes[index] !== element) {
+					index++;
+				}
+
+				var newElement = siblingNodes[index + 1];
+
+				var addEventListenersToNewElement = function(newElement) {
+					// update that and it's children to have event listeners
+					
+					if (newElement.tagName === 'DIV')
+					{
+						addRefreshEvent(newElement);
+						addEventListenersToNewElement
+					}
+
+					/*for (var tabIdx = 0; tabIdx < tabPages.length; tabIdx++) {
+						var tabElements = tabPages[tabIdx];
+	
+						var elementIdx = tabElements.indexOf(element);
+	
+						if (elementIdx !== -1) {
+							break;
+						}
+					}
+	
+					tabPages[tabIdx][elementIdx] = newElement;*/
+				};
+
+				/*var updateElementsInDiv = function (currentElement, correspondingElement) {
+					for (var idx = 0; idx < currentElement.childNodes.length; idx++) {
+						var currentChildElement = currentElement.childNodes[idx];
+						var correspondingChildElement = correspondingElement.childNodes[idx];
+
+						if (currentChildElement.tagName === 'DIV') {
+							updateElementsInDiv(currentChildElement, correspondingChildElement);
+						}
+						else {
+							addKeydownEvents(currentChildElement);
+							replaceElement(correspondingChildElement, currentChildElement);
+						}
+					}
+				};*/
+
+				if (newElement.tagName === 'DIV') {
+					updateElementsInDiv(newElement, element);
+				}
+				else {
+					addKeydownEvents(newElement);
+					replaceElement(element, newElement);
+				}
+			});
+		}
+
 		function findElements(tabPagesRootNode) {
 			var tabPages = [];
-			var tabElements = [];
+			//var tabElements = [];
 
 			function findElementsInTabPage(currentNode)
 			{
-				var currentChildNodes = currentNode.childNodes;
+				var currentChildNodes = currentNode;
 
-				if (currentChildNodes.length <= 0) {
+				/*if (currentChildNodes.length <= 0) {
 					return;
 				}
 	
@@ -1430,6 +1467,7 @@ L.Control.JSDialogBuilder = L.Control.extend({
 					var currentChildNode = currentChildNodes[childIndex];
 	
 					if (currentChildNode.tagName === 'DIV') {
+						addRefreshEvent(currentChildNode); // DIVs are not referenced in the tabElements array, but do need to be refreshed.
 						findElementsInTabPage(currentChildNode);
 					}
 					else if (currentChildNode.tagName === 'INPUT' || currentChildNode.tagName === 'BUTTON' || currentChildNode.tagName === 'TEXTAREA')
@@ -1438,10 +1476,12 @@ L.Control.JSDialogBuilder = L.Control.extend({
 					}
 				}
 
-				return tabElements;
+				return tabElements;*/
+
+				return currentChildNodes; // if using this then simplify later
 			}
 			
-			tabPagesRootNode.childNodes.forEach(function(childNode) { tabPages.push(findElementsInTabPage(childNode)); tabElements = [];});
+			tabPagesRootNode.childNodes.forEach(function(childNode) { tabPages.push(findElementsInTabPage(childNode)); /*tabElements = [];*/});
 
 			return tabPages;
 		}
@@ -1459,81 +1499,37 @@ L.Control.JSDialogBuilder = L.Control.extend({
 
 		tabPages.forEach(function(elements)
 		{
-			elements.forEach(function(element)
+			function assignEventsToElementsInTabPage(currentNode)
 			{
-				var addKeydownEvents = function (element) {
-					element.addEventListener('keydown', function(e) {
-						//var currentElement = e.currentTarget;
-		
-						switch (e.key) {
-							case 'ArrowLeft':
-								alert('uwu');
-								break;
+				var currentChildNodes = currentNode.childNodes;
+
+				if (currentChildNodes.length <= 0) {
+					return;
+				}
 	
-							case 'ArrowRight':
-								alert('uwu');
-								break;
-							
-							case 'ArrowDown':
-								alert('uwu');
-								break;
-							
-							case 'ArrowUp':
-								alert('uwu');
-								break;			
-						}
-					});
-				};
-				
-				//tabPages[tabPages.indexOf(element.parentNode)]
-				addKeydownEvents(element);
-
-				element.addEventListener('refresh', function() {
-					/*addKeydownEvents(e.detail);
-					elements[elements.indexof(element)] = e.detail;
-					elements.delete(element);*/
-
-					/*tabPages = findElements(element.parentNode);
-
-					tabPages.forEach(function(elements)
+				for (var childIndex = 0; childIndex < currentChildNodes.length; childIndex++) {
+					var currentChildNode = currentChildNodes[childIndex];
+	
+					if (currentChildNode.tagName === 'DIV') {
+						addRefreshEvent(currentChildNode); // DIVs are not referenced in the tabElements array, but do need to be refreshed.
+						assignEventsToElementsInTabPage(currentChildNode);
+					}
+					else /*if (currentChildNode.tagName === 'INPUT' || currentChildNode.tagName === 'BUTTON' || currentChildNode.tagName === 'TEXTAREA')*/
 					{
-						elements.forEach(function(element) {
-							addKeydownEvents(element);
-						});
-					});		*/
-					//tabPages[tabPages.indexOf(element.parentNode)][tabPages.indexOf(element) + 1];
-					var siblingNodes = element.parentNode.childNodes;
-
-					// .indexOf does not exist for a NodeArray.
-					var index = 0;
-					while (siblingNodes[index] !== element) {
-						index++;
+						addKeydownEvents(currentChildNode);
+						addRefreshEvent(currentChildNode);
 					}
+				}
+			}
 
-					var newElement = siblingNodes[index + 1];
 
-					addKeydownEvents(newElement);
+			/*elements.forEach(function(element)
+			{
+				addKeydownEvents(element);
+				addRefreshEvent(element);
+			});*/
 
-					//var tabIdx = tabPages.indexOf(element.parentNode);
-
-					for (var tabIdx = 0; tabIdx < tabPages.length; tabIdx++) {
-						var tabElements = tabPages[tabIdx];
-
-						var elementIdx = tabElements.indexOf(element);
-
-						if (elementIdx !== -1) {
-							break;
-						}
-					}
-
-					//var elementIdx = tabPages[tabIdx].indexOf(element);
-
-					tabPages[tabIdx][elementIdx] = newElement;
-					/*element.parentNode.childNodes.forEach(function(element) {
-						addKeydownEvents(element);
-					});*/			
-				});
-			});
+			assignEventsToElementsInTabPage(elements);
 		});
 
 		return false;
@@ -3535,32 +3531,28 @@ L.Control.JSDialogBuilder = L.Control.extend({
 		parent.insertBefore(temporaryParent.firstChild, control.nextSibling);
 
 		var copyEventsEvent = new Event('refresh');
+
+		/*var updateElementsInDiv = function (element) {
+
+			for (var idx = 0; idx < element.childNodes.length; idx++) {
+				var currentChildElement = element.childNodes[idx];
+
+				if (currentChildElement.tagName === 'DIV') {
+					updateElementsInDiv(currentChildElement);
+				}
+				else {
+					currentChildElement.dispatchEvent(copyEventsEvent);
+				}
+			}
+		};
+
+		if (control.tagName === 'DIV') {
+			updateElementsInDiv(control);
+		}
+		else {
+			control.dispatchEvent(copyEventsEvent);
+		}*/
 		control.dispatchEvent(copyEventsEvent);
-
-		/*var copyEventsEvent = new Event('keyDown', {detail: control.nextSibling, key:'ArrowLeft'});
-		temporaryParent.firstChild.dispatchEvent(copyEventsEvent);*/
-
-		/*temporaryParent.firstChild.addEventListener('keydown', function(e) {
-					//var currentElement = e.currentTarget;
-	
-					switch (e.key) {
-						case 'ArrowLeft':
-							alert('uwu');
-							break;
-
-						case 'ArrowRight':
-							alert('uwu');
-							break;
-						
-						case 'ArrowDown':
-							alert('uwu');
-							break;
-						
-						case 'ArrowUp':
-							alert('uwu');
-							break;			
-					}
-				});*/
 
 		var backupGridSpan = control.style.gridColumn;
 		L.DomUtil.remove(control);
