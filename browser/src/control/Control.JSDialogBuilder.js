@@ -1393,6 +1393,23 @@ L.Control.JSDialogBuilder = L.Control.extend({
 		}
 
 		function addRefreshEvent(element) {
+			function giveChildrenEvents(element) {
+				var childNodes = element.childNodes;
+
+				for (var idx = 0; idx < childNodes.length; idx++) {
+					var currentChildNode = childNodes[idx];
+
+					addRefreshEvent(currentChildNode);
+
+					if (currentChildNode.tagName === 'DIV') {
+						giveChildrenEvents(currentChildNode);
+					}
+					else {
+						addKeydownEvents(currentChildNode);
+					}
+				}
+			}
+
 			element.addEventListener('refresh', function() {
 				var siblingNodes = element.parentNode.childNodes;
 
@@ -1401,82 +1418,25 @@ L.Control.JSDialogBuilder = L.Control.extend({
 				while (siblingNodes[index] !== element) {
 					index++;
 				}
-
 				var newElement = siblingNodes[index + 1];
 
-				var addEventListenersToNewElement = function(newElement) {
-					// update that and it's children to have event listeners
-					
-					if (newElement.tagName === 'DIV')
-					{
-						addRefreshEvent(newElement);
-						addEventListenersToNewElement
-					}
-
-					/*for (var tabIdx = 0; tabIdx < tabPages.length; tabIdx++) {
-						var tabElements = tabPages[tabIdx];
-	
-						var elementIdx = tabElements.indexOf(element);
-	
-						if (elementIdx !== -1) {
-							break;
-						}
-					}
-	
-					tabPages[tabIdx][elementIdx] = newElement;*/
-				};
-
-				/*var updateElementsInDiv = function (currentElement, correspondingElement) {
-					for (var idx = 0; idx < currentElement.childNodes.length; idx++) {
-						var currentChildElement = currentElement.childNodes[idx];
-						var correspondingChildElement = correspondingElement.childNodes[idx];
-
-						if (currentChildElement.tagName === 'DIV') {
-							updateElementsInDiv(currentChildElement, correspondingChildElement);
-						}
-						else {
-							addKeydownEvents(currentChildElement);
-							replaceElement(correspondingChildElement, currentChildElement);
-						}
-					}
-				};*/
+				addRefreshEvent(newElement);
 
 				if (newElement.tagName === 'DIV') {
-					updateElementsInDiv(newElement, element);
+					giveChildrenEvents(newElement);
 				}
 				else {
 					addKeydownEvents(newElement);
-					replaceElement(element, newElement);
 				}
 			});
 		}
 
 		function findElements(tabPagesRootNode) {
 			var tabPages = [];
-			//var tabElements = [];
 
 			function findElementsInTabPage(currentNode)
 			{
 				var currentChildNodes = currentNode;
-
-				/*if (currentChildNodes.length <= 0) {
-					return;
-				}
-	
-				for (var childIndex = 0; childIndex < currentChildNodes.length; childIndex++) {
-					var currentChildNode = currentChildNodes[childIndex];
-	
-					if (currentChildNode.tagName === 'DIV') {
-						addRefreshEvent(currentChildNode); // DIVs are not referenced in the tabElements array, but do need to be refreshed.
-						findElementsInTabPage(currentChildNode);
-					}
-					else if (currentChildNode.tagName === 'INPUT' || currentChildNode.tagName === 'BUTTON' || currentChildNode.tagName === 'TEXTAREA')
-					{
-						tabElements.push(currentChildNode);
-					}
-				}
-
-				return tabElements;*/
 
 				return currentChildNodes; // if using this then simplify later
 			}
