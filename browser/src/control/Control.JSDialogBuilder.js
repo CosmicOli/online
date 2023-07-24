@@ -1300,13 +1300,10 @@ L.Control.JSDialogBuilder = L.Control.extend({
 									return firstFocusableElement;
 								}
 							}
-							else //if (currentChildNode.tagName === 'INPUT' || currentChildNode.tagName === 'BUTTON' || currentChildNode.tagName === 'TEXTAREA')
-							//{
-								if (!currentChildNode.disabled && !currentChildNode.hidden && !currentChildNode.classList.contains('hidden'))
-								{
-									return currentChildNode;
-								}
-							//}
+							else if (!currentChildNode.disabled && !currentChildNode.hidden && !currentChildNode.classList.contains('hidden'))
+							{
+								return currentChildNode;
+							}
 						}
 
 						return null;
@@ -1404,32 +1401,68 @@ L.Control.JSDialogBuilder = L.Control.extend({
 						return null;
 					}
 
-					for (var childIndex = 0; childIndex < currentChildNodes.length; childIndex++) {
+					for (var index = 0; index < currentChildNodes.length; index++) {
+						var childIndex = index;
+						if (!right) {
+							childIndex = currentChildNodes.length - index - 1;
+							// currently this defaults to the bottom right, instead of the correct-level right.
+						}
+
 						var currentChildNode = currentChildNodes[childIndex];
 						
-						if (currentChildNode.tabIndex === -1) {
+						if (currentChildNode.tabIndex === undefined) {
+							return null;
+						}
+						else if (currentChildNode.tabIndex === -1) {
 							var firstFocusableElement = traverseDown(currentChildNode);
 
 							if (firstFocusableElement !== null) {
 								return firstFocusableElement;
 							}
 						}
-						else //if (currentChildNode.tagName === 'INPUT' || currentChildNode.tagName === 'BUTTON' || currentChildNode.tagName === 'TEXTAREA')
-						//{
-							if (!currentChildNode.disabled && !currentChildNode.hidden && !currentChildNode.classList.contains('hidden'))
-							{
-								return currentChildNode;
+						else
+						{
+							var classListContainsHidden = false;
+							if (currentChildNode.classList !== undefined) {
+								classListContainsHidden = currentChildNode.classList.contains('hidden');
 							}
-						//}
+
+							if (!currentChildNode.disabled && !currentChildNode.hidden && !classListContainsHidden) {
+								var firstFocusableChild = traverseDown(currentChildNode);
+								if (firstFocusableChild === null) {
+									return currentChildNode;
+								}
+								else {
+									return firstFocusableChild;
+								}
+							}
+						}
 					}
 
 					return null;
+				};
+
+				var findContainer = function(currentElement) {
+					if (currentElement.id.includes('container')) {
+						return currentElement; // This means the search has reached the highest possible layer.
+					}
+					else if (currentElement.classList.contains('cell')) {
+						return currentElement;
+					}
+					else {
+						return findContainer(currentElement.parentNode);
+					}
 				};
 
 				var traverseUp = function(currentElement) {
 					var currentParent = currentElement.parentNode;
 					
 					if (currentElement.classList.contains('cell')) {
+						var container = findContainer(currentElement.parentNode);
+						if (container.offsetWidth < container.offsetHeight) {
+							return traverseUp(currentParent);
+						}
+
 						var siblingNodes = currentParent.childNodes;
 
 						var difference = (right ? 1 : -1);
@@ -1438,59 +1471,31 @@ L.Control.JSDialogBuilder = L.Control.extend({
 						while (siblingNodes[index] !== currentElement) {
 								index++;
 						}
-						var nextChild = siblingNodes[index + difference];
+
+						var nextIndex = index + difference;
+
+						// change to be one if statement if kept like this
+						if (nextIndex < 0) {
+							return traverseUp(currentParent);
+						}
+						else if (nextIndex >= siblingNodes.length) {
+							return traverseUp(currentParent);
+						}
+
+						var nextChild = siblingNodes[nextIndex];
 
 						return traverseDown(nextChild);
 					}
 					else {
 						return traverseUp(currentParent);
 					}
-
-					/*if (currentParent.childNodes.length < 2) {
-						return traverseUp(currentParent); 
-					}
-					else //{
-						// change so if a down line is traversed and has no focusable elements, continue upwards and through other paths on the same level
-						if (currentParent.offsetWidth > currentParent.offsetHeight) {
-							var siblingNodes = currentParent.childNodes;
-
-							var difference = (right ? 1 : -1);
-
-							var index = 0;
-							while (siblingNodes[index] !== currentElement) {
-								index++;
-							}
-							var nextChild = siblingNodes[index + difference];
-
-							if (nextChild === undefined) {
-								return traverseUp(currentParent);
-							}
-
-							var nextFocusableElement = traverseDown(nextChild);
-
-							if (nextFocusableElement === null)
-							{
-								return traverseUp(currentParent);
-							}
-							else {
-								return nextFocusableElement;
-							}
-						}
-						/*else {
-							// move to next div's first element
-						}*/
-					//}
 				};
 
 				var firstFocusableElement = traverseUp(currentElement);
 
 				firstFocusableElement.focus();
 
-				// if "parent" offset width greater than height
-				// -> if at the end of the div
-				// -> -> move to next div's first element 
-				// else
-				// -> move to next focusable item in div as there will be a neighbour
+				// when going right make it so that it defaults to last and not first cell
 			};
 
 			/*var handleVerticalArrow = function(currentElement, up) {
@@ -1572,15 +1577,8 @@ L.Control.JSDialogBuilder = L.Control.extend({
 
 		function findElements(tabPagesRootNode) {
 			var tabPages = [];
-
-			function findElementsInTabPage(currentNode)
-			{
-				var currentChildNodes = currentNode;
-
-				return currentChildNodes; // if using this then simplify later
-			}
 			
-			tabPagesRootNode.childNodes.forEach(function(childNode) { tabPages.push(findElementsInTabPage(childNode)); /*tabElements = [];*/});
+			tabPagesRootNode.childNodes.forEach(function(childNode) { tabPages.push(childNode); /*tabElements = [];*/});
 
 			return tabPages;
 		}
@@ -1613,20 +1611,13 @@ L.Control.JSDialogBuilder = L.Control.extend({
 						addRefreshEvent(currentChildNode); // DIVs are not referenced in the tabElements array, but do need to be refreshed.
 						assignEventsToElementsInTabPage(currentChildNode);
 					}
-					else /*if (currentChildNode.tagName === 'INPUT' || currentChildNode.tagName === 'BUTTON' || currentChildNode.tagName === 'TEXTAREA')*/
+					else
 					{
 						addKeydownEvents(currentChildNode);
 						addRefreshEvent(currentChildNode);
 					}
 				}
 			}
-
-
-			/*elements.forEach(function(element)
-			{
-				addKeydownEvents(element);
-				addRefreshEvent(element);
-			});*/
 
 			assignEventsToElementsInTabPage(elements);
 		});
