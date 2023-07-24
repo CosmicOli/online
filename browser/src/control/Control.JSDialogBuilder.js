@@ -1280,7 +1280,7 @@ L.Control.JSDialogBuilder = L.Control.extend({
 
 				var moveFocusIntoTabPage = function(tab) {
 					var tabIdx = tabs.indexOf(tab);
-					var currentElement = tabPages[tabIdx];
+					var currentElement = contentDivs[tabIdx];
 
 					function findFirstFocusableElement(currentNode)
 					{
@@ -1293,6 +1293,9 @@ L.Control.JSDialogBuilder = L.Control.extend({
 						for (var childIndex = 0; childIndex < currentChildNodes.length; childIndex++) {
 							var currentChildNode = currentChildNodes[childIndex];
 							
+							if (currentChildNode.tabIndex === undefined) {
+								return null;
+							}
 							if (currentChildNode.tabIndex === -1) {
 								var firstFocusableElement = findFirstFocusableElement(currentChildNode);
 
@@ -1300,9 +1303,22 @@ L.Control.JSDialogBuilder = L.Control.extend({
 									return firstFocusableElement;
 								}
 							}
-							else if (!currentChildNode.disabled && !currentChildNode.hidden && !currentChildNode.classList.contains('hidden'))
+							else
 							{
-								return currentChildNode;
+								var classListContainsInvalidClass = false;
+								if (currentChildNode.classList !== undefined) {
+									classListContainsInvalidClass = currentChildNode.classList.contains('hidden') || currentChildNode.classList.contains('jsdialog-begin-marker') || currentChildNode.classList.contains('jsdialog-end-marker');
+								}
+
+								if (!currentChildNode.disabled && !currentChildNode.hidden && !classListContainsInvalidClass) {
+									var firstFocusableChild = findFirstFocusableElement(currentChildNode);
+									if (firstFocusableChild === null) {
+										return currentChildNode;
+									}
+									else {
+										return firstFocusableChild;
+									}
+								}
 							}
 						}
 
@@ -1392,147 +1408,28 @@ L.Control.JSDialogBuilder = L.Control.extend({
 		}
 
 		function addKeydownEvents(element) {
-			var handleHorizontalArrow = function(currentElement, right) {
-
-				var traverseDown = function (currentElement) {
-					var currentChildNodes = currentElement.childNodes;
-					
-					if (currentChildNodes.length <= 0) {
-						return null;
-					}
-
-					for (var index = 0; index < currentChildNodes.length; index++) {
-						var childIndex = index;
-						if (!right) {
-							childIndex = currentChildNodes.length - index - 1;
-							// currently this defaults to the bottom right, instead of the correct-level right.
-						}
-
-						var currentChildNode = currentChildNodes[childIndex];
-						
-						if (currentChildNode.tabIndex === undefined) {
-							return null;
-						}
-						else if (currentChildNode.tabIndex === -1) {
-							var firstFocusableElement = traverseDown(currentChildNode);
-
-							if (firstFocusableElement !== null) {
-								return firstFocusableElement;
-							}
-						}
-						else
-						{
-							var classListContainsHidden = false;
-							if (currentChildNode.classList !== undefined) {
-								classListContainsHidden = currentChildNode.classList.contains('hidden');
-							}
-
-							if (!currentChildNode.disabled && !currentChildNode.hidden && !classListContainsHidden) {
-								var firstFocusableChild = traverseDown(currentChildNode);
-								if (firstFocusableChild === null) {
-									return currentChildNode;
-								}
-								else {
-									return firstFocusableChild;
-								}
-							}
-						}
-					}
-
-					return null;
-				};
-
+			element.addEventListener('keydown', function(e) {
 				var findContainer = function(currentElement) {
 					if (currentElement.id.includes('container')) {
-						return currentElement; // This means the search has reached the highest possible layer.
-					}
-					else if (currentElement.classList.contains('cell')) {
 						return currentElement;
 					}
 					else {
 						return findContainer(currentElement.parentNode);
 					}
 				};
-
-				var traverseUp = function(currentElement) {
-					var currentParent = currentElement.parentNode;
-					
-					if (currentElement.classList.contains('cell')) {
-						var container = findContainer(currentElement.parentNode);
-						if (container.offsetWidth < container.offsetHeight) {
-							return traverseUp(currentParent);
-						}
-
-						var siblingNodes = currentParent.childNodes;
-
-						var difference = (right ? 1 : -1);
-
-						var index = 0;
-						while (siblingNodes[index] !== currentElement) {
-								index++;
-						}
-
-						var nextIndex = index + difference;
-
-						// change to be one if statement if kept like this
-						if (nextIndex < 0) {
-							return traverseUp(currentParent);
-						}
-						else if (nextIndex >= siblingNodes.length) {
-							return traverseUp(currentParent);
-						}
-
-						var nextChild = siblingNodes[nextIndex];
-
-						return traverseDown(nextChild);
-					}
-					else {
-						return traverseUp(currentParent);
-					}
-				};
-
-				var firstFocusableElement = traverseUp(currentElement);
-
-				firstFocusableElement.focus();
-
-				// when going right make it so that it defaults to last and not first cell
-			};
-
-			/*var handleVerticalArrow = function(currentElement, up) {
-				var focusOnTabButton = function() {
-					// find the current tab id or idx
-					// focus on the tab button with that id/idx
-				};
-
-				// if "parent" offset height greater than width
-				// -> if at the end of the div
-				// -> -> if there is no div above
-				// -> -> -> go up to the tab buttons
-				// -> -> else
-				// -> -> -> move to next div's first element
-				// else
-				// -> move to next focusable item in div as there will be a neighbour
-			};*/
-		
-			element.addEventListener('keydown', function(e) {
+				
 				var currentElement = e.currentTarget;
 
-				switch (e.key) {
-					case 'ArrowLeft':
-						handleHorizontalArrow(currentElement, false);
-						break;
+				if (e.key === 'ArrowUp') {
+					var container = findContainer(currentElement);
 
-					case 'ArrowRight':
-						handleHorizontalArrow(currentElement, true);
-						break;
+					var containerId = container.id;
 					
-					case 'ArrowDown':
-						//handleVerticalArrow(currentElement, false);
-						break;
-					
-					case 'ArrowUp':
-						//handleVerticalArrow(currentElement, true);
-						break;			
+					var tabName = containerId.substr(0, containerId.indexOf('-'));
+
+					var tabIdx = tabIds.indexOf(tabName);
+
+					tabs[tabIdx].focus();
 				}
 			});
 		}
@@ -1575,15 +1472,15 @@ L.Control.JSDialogBuilder = L.Control.extend({
 			});
 		}
 
-		function findElements(tabPagesRootNode) {
+		/*function findElements(tabPagesRootNode) {
 			var tabPages = [];
 			
-			tabPagesRootNode.childNodes.forEach(function(childNode) { tabPages.push(childNode); /*tabElements = [];*/});
+			tabPagesRootNode.childNodes.forEach(function(childNode) { tabPages.push(childNode); /*tabElements = [];*//*});
 
 			return tabPages;
-		}
+		}*/
 		
-		var childNodes = tabWidgetRootContainer.childNodes;
+		/*var childNodes = tabWidgetRootContainer.childNodes;
 		var tabPageRootNode;
 		for (var index = 0; index < childNodes.length; index++) {
 			var currentNode = childNodes[index];
@@ -1592,9 +1489,9 @@ L.Control.JSDialogBuilder = L.Control.extend({
 				tabPageRootNode = currentNode;
 			}
 		}
-		var tabPages = findElements(tabPageRootNode);
+		var tabPages = findElements(tabPageRootNode);*/
 
-		tabPages.forEach(function(elements)
+		contentDivs.forEach(function(elements)
 		{
 			function assignEventsToElementsInTabPage(currentNode)
 			{
