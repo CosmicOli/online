@@ -876,6 +876,9 @@ L.CanvasTileLayer = L.Layer.extend({
 		// Tile garbage collection counter
 		this._gcCounter = 0;
 
+		// Queue of tiles which were GC'd earlier than coolwsd expected
+		this._fetchKeyframeQueue = [];
+
 		// Position and size of the selection start (as if there would be a cursor caret there).
 
 		// View cursors with viewId to 'cursor info' mapping
@@ -1515,6 +1518,7 @@ L.CanvasTileLayer = L.Layer.extend({
 			deltaCount: 0, // how many deltas on top of the keyframe
 			updateCount: 0, // how many updates did we have
 			loadCount: 0, // how many times did we get a new keyframe
+			gcErrors: 0, // count freed keyframe in JS, but kept in wsd.
 			missingContent: 0, // how many times rendered without content
 			invalidateCount: 0, // how many invalidations touched this tile
 			viewId: 0, // canonical view id
@@ -1552,8 +1556,7 @@ L.CanvasTileLayer = L.Layer.extend({
 	_onMessage: function (textMsg, img) {
 		this._saveMessageForReplay(textMsg);
 		// 'tile:' is the most common message type; keep this the first.
-		if (textMsg.startsWith('tile:') || textMsg.startsWith('delta:') ||
-		    textMsg.startsWith('update:')) {
+		if (textMsg.startsWith('tile:') || textMsg.startsWith('delta:')) {
 			this._onTileMsg(textMsg, img);
 		}
 		else if (textMsg.startsWith('commandvalues:')) {
@@ -2170,7 +2173,7 @@ L.CanvasTileLayer = L.Layer.extend({
 		// proxy cannot identify RouteToken if it is encoded
 		var routeTokenIndex = videoDesc.url.indexOf('%26RouteToken=');
 		if (routeTokenIndex != -1) {
-			videoDesc.url = videoDesc.url.replace('%26RouteToken=', '&RouteToken=');
+			videoDesc.url = videoDesc.url.replace('%26RouteToken=', '&amp;RouteToken=');
 		}
 
 		var videoToInsert = '<?xml version="1.0" encoding="UTF-8"?>\
@@ -2874,9 +2877,12 @@ L.CanvasTileLayer = L.Layer.extend({
 
 	_removeView: function(viewId) {
 		// Remove selection, if any.
-		if (this._viewSelections[viewId] && this._viewSelections[viewId].selection) {
-			this._viewSelections[viewId].selection.remove();
-			this._viewSelections[viewId].selection = undefined;
+		if (this._viewSelections[viewId]) {
+			if (this._viewSelections[viewId].selection) {
+				this._viewSelections[viewId].selection.remove();
+				this._viewSelections[viewId].selection = undefined;
+			}
+			delete this._viewSelections[viewId];
 		}
 
 		// Remove the view and update (to refresh as needed).
@@ -6208,7 +6214,15 @@ L.CanvasTileLayer = L.Layer.extend({
 		if (queue.length !== 0)
 			this._addTiles(queue);
 
-		if (this.isCalc() || this.isWriter()) {
+		if (this.isCalc() || this.isWriter())
+			this._initPreFetchAdjacentTiles(pixelBounds, zoom);
+	},
+
+	_initPreFetchAdjacentTiles: function (pixelBounds, zoom) {
+		if (this._adjacentTilePreFetcher)
+			clearTimeout(this._adjacentTilePreFetcher);
+
+		this._adjacentTilePreFetcher = setTimeout(function() {
 			// Extend what we request to include enough to populate a full
 			// scroll after or before the current viewport
 			//
@@ -6225,7 +6239,7 @@ L.CanvasTileLayer = L.Layer.extend({
 			pixelTopLeft.y += pixelHeight;
 			pixelBottomRight.y += pixelPrevNextHeight;
 			pixelBounds = new L.Bounds(pixelTopLeft, pixelBottomRight);
-			queue = this._getMissingTiles(pixelBounds, zoom);
+			var queue = this._getMissingTiles(pixelBounds, zoom);
 
 			pixelTopLeft.y -= pixelHeight + pixelPrevNextHeight;
 			pixelBottomRight.y -= pixelHeight + pixelPrevNextHeight;
@@ -6234,7 +6248,8 @@ L.CanvasTileLayer = L.Layer.extend({
 
 			if (queue.length !== 0)
 				this._addTiles(queue);
-		}
+
+		}.bind(this), 250 /*ms*/);
 	},
 
 	_sendClientVisibleArea: function (forceUpdate) {
@@ -6524,6 +6539,7 @@ L.CanvasTileLayer = L.Layer.extend({
 			tile.canvas.height = 0;
 			delete tile.canvas;
 		}
+		tile.imgDataCache = null;
 	},
 
 	_removeTile: function (key) {
@@ -6620,7 +6636,7 @@ L.CanvasTileLayer = L.Layer.extend({
 				if (this._debugDeltas)
 					window.app.console.log('Restoring a tile from cached delta at ' +
 							       this._tileCoordsToKey(tile.coords));
-				this._applyDelta(tile, tile.rawDeltas, true);
+				this._applyDelta(tile, tile.rawDeltas, true, false);
 			}
 		}
 		tile.lastRendered = now;
@@ -6651,9 +6667,10 @@ L.CanvasTileLayer = L.Layer.extend({
 		if (this._debugDeltas)
 			window.app.console.log('Garbage collect! iter: ' + this._gcCounter);
 
-		/* uncomment to exercise me harder.
-		   highNumCanvases = 3; lowNumCanvases = 2;
-		   highDeltaMemory = 1024*1024; lowDeltaMemory = 1024*128; */
+		/* uncomment to exercise me harder. */
+		/* highNumCanvases = 3; lowNumCanvases = 2;
+		   highDeltaMemory = 1024*1024; lowDeltaMemory = 1024*128;
+		   highTileCount = 100; lowTileCount = 50; */
 
 		var keys = [];
 		for (var key in this._tiles) // no .keys() method.
@@ -6671,9 +6688,6 @@ L.CanvasTileLayer = L.Layer.extend({
 			if (tile.canvas)
 				canvasKeys.push(keys[i]);
 			totalSize += tile.rawDeltas ? tile.rawDeltas.length : 0;
-			// unconditionally ditch any imgData cache entries if the tile isn't current
-			if (!tile.current && tile.imgDataCache)
-				tile.imgDataCache = null;
 		}
 
 		// Trim ourselves down to size.
@@ -6697,12 +6711,13 @@ L.CanvasTileLayer = L.Layer.extend({
 			{
 				var key = keys[i];
 				var tile = this._tiles[key];
-				if (tile.rawDeltas)
+				if (tile.rawDeltas && !tile.current)
 				{
 					totalSize -= tile.rawDeltas.length;
 					if (this._debugDeltas)
 						window.app.console.log('Reclaim delta ' + key + ' memory: ' +
 								       tile.rawDeltas.length + ' bytes');
+					this._reclaimTileCanvasMemory(tile);
 					tile.rawDeltas = null;
 					// force keyframe
 					tile.wireId = 0;
@@ -6796,22 +6811,36 @@ L.CanvasTileLayer = L.Layer.extend({
 		return resultu8;
 	},
 
-	_applyDelta: function(tile, rawDelta, isKeyframe) {
+	_applyDelta: function(tile, rawDelta, isKeyframe, wireMessage) {
 		if (this._debugDeltas)
 			window.app.console.log('Applying a raw ' + (isKeyframe ? 'keyframe' : 'delta') +
 					       ' of length ' + rawDelta.length +
 					       (this._debugDeltasDetail ? (' hex: ' + hex2string(rawDelta)) : ''));
-		if (isKeyframe)
-		{
-			tile.loadCount++;
-			tile.deltaCount = 0;
-			tile.updateCount = 0;
-		}
-		else
-			tile.deltaCount++;
 
-		if (rawDelta.length === 0)
-			return; // that was easy!
+		// Important to recurse & re-constitute from tile.rawDeelts
+		// before appending rawDelta and then applying it again.
+		var ctx = this._ensureContext(tile);
+		if (!ctx) // out of canvas / texture memory.
+			return;
+
+		// if re-creating a canvas from rawDeltas don't update counts
+		if (wireMessage)
+		{
+			if (isKeyframe)
+			{
+				tile.loadCount++;
+				tile.deltaCount = 0;
+				tile.updateCount = 0;
+			}
+			else if (rawDelta.length === 0)
+			{
+				tile.updateCount++;
+				return; // that was easy
+			}
+			else
+				tile.deltaCount++;
+		}
+		// else - re-constituting from tile.rawData
 
 		var traceEvent = app.socket.createCompleteTraceEvent('L.CanvasTileLayer.applyDelta',
 								     { keyFrame: isKeyframe, length: rawDelta.length });
@@ -6824,6 +6853,11 @@ L.CanvasTileLayer = L.Layer.extend({
 			if (tile.rawDeltas && tile.rawDeltas != rawDelta) // help the gc?
 				tile.rawDeltas.length = 0;
 			tile.rawDeltas = rawDelta; // overwrite
+		}
+		else if (!tile.rawDeltas)
+		{
+			window.app.console.log('Unusual: attempt to append a delta when we have no keyframe.');
+			return;
 		}
 		else // assume we already have a delta.
 		{
@@ -6850,10 +6884,6 @@ L.CanvasTileLayer = L.Layer.extend({
 		var allDeltas = window.fzstd.decompress(rawDelta);
 
 		var imgData;
-		var ctx = this._ensureContext(tile);
-
-		if (!ctx) // out of canvas / texture memory.
-			return;
 
 		// May have been changed by _ensureContext garbage collection
 		var canvas = tile.canvas;
@@ -6865,8 +6895,8 @@ L.CanvasTileLayer = L.Layer.extend({
 			var delta = allDeltas.subarray(offset);
 
 			// Debugging paranoia: if we get this wrong bad things happen.
-			if ((isKeyframe && delta.length != canvas.width * canvas.height * 4) ||
-			    (!isKeyframe && delta.length == canvas.width * canvas.height * 4))
+			if ((isKeyframe && delta.length < canvas.width * canvas.height * 4) ||
+			    (!isKeyframe && delta.length >= canvas.width * canvas.height * 4))
 			{
 				window.app.console.log('Unusual ' + (isKeyframe ? 'keyframe' : 'delta') +
 						       ' possibly mis-tagged, suspicious size vs. type ' +
@@ -7041,15 +7071,25 @@ L.CanvasTileLayer = L.Layer.extend({
 		if (tile.invalidFrom == tile.wireId)
 			window.app.console.debug('Nasty - updated wireId matches old one');
 
+		var hasContent = true;
+
 		// obscure case: we could have garbage collected the
-		// keyframe content and now just have a delta with nothing
-		// to apply it to; if so, mark it bad to re-fetch.
+		// keyframe content in JS but coolwsd still thinks we have
+		// it and now we just have a delta with nothing to apply
+		// it to; if so, mark it bad to re-fetch.
 		if (img && !img.isKeyframe && !tile.hasKeyframe())
 		{
 			window.app.console.debug('Unusual: Delta sent - but we have no keyframe for ' + key);
 			// force keyframe
 			tile.wireId = 0;
 			tile.invalidFrom = 0;
+			tile.gcErrors++;
+
+			// queue a later fetch of this and any other
+			// rogue tiles in this state
+			this._fetchKeyframeQueue.push(coords);
+
+			hasContent = false;
 		}
 
 		if (this._debug) {
@@ -7068,17 +7108,17 @@ L.CanvasTileLayer = L.Layer.extend({
 		L.Log.log(textMsg, 'INCOMING', key);
 
 		// updates don't need more chattiness with a tileprocessed
-		if (!textMsg.startsWith('update:'))
+		if (hasContent)
 		{
-			this._applyDelta(tile, img.rawData, img.isKeyframe);
+			this._applyDelta(tile, img.rawData, img.isKeyframe, true);
 			this._tileReady(coords);
-
-			// Queue acknowledgment, that the tile message arrived
-			var mode = (tileMsgObj.mode !== undefined) ? tileMsgObj.mode : 0;
-			var tileID = tileMsgObj.part + ':' + mode + ':' + tileMsgObj.x + ':' + tileMsgObj.y + ':'
-			    + tileMsgObj.tileWidth + ':' + tileMsgObj.tileHeight + ':' + tileMsgObj.nviewid;
-			this._queuedProcessed.push(tileID);
 		}
+
+		// Queue acknowledgment, that the tile message arrived
+		var mode = (tileMsgObj.mode !== undefined) ? tileMsgObj.mode : 0;
+		var tileID = tileMsgObj.part + ':' + mode + ':' + tileMsgObj.x + ':' + tileMsgObj.y + ':'
+		    + tileMsgObj.tileWidth + ':' + tileMsgObj.tileHeight + ':' + tileMsgObj.nviewid;
+		this._queuedProcessed.push(tileID);
 	},
 
 	_sendProcessedResponse: function() {
@@ -7087,6 +7127,12 @@ L.CanvasTileLayer = L.Layer.extend({
 		// FIXME: new multi-tile-processed message.
 		for (var i = 0; i < toSend.length; i++) {
 			app.socket.sendMessage('tileprocessed tile=' + toSend[i]);
+		}
+		if (this._fetchKeyframeQueue.length > 0)
+		{
+			window.app.console.warn('re-fetching prematurely GCd keyframes');
+			this._sendTileCombineRequest(this._fetchKeyframeQueue);
+			this._fetchKeyframeQueue = [];
 		}
 	},
 

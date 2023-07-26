@@ -13,6 +13,7 @@
 #include <config_version.h>
 
 #include <dlfcn.h>
+#include <limits>
 #ifdef __linux__
 #include <ftw.h>
 #include <sys/vfs.h>
@@ -708,6 +709,7 @@ public:
         _stop(false),
         _editorId(-1),
         _editorChangeWarning(false),
+        _lastMemTrimTime(std::chrono::steady_clock::now()),
         _mobileAppDocId(mobileAppDocId),
         _inputProcessingEnabled(true)
     {
@@ -982,6 +984,31 @@ public:
         _deltaGen.dropCache();
     }
 
+    void trimIfExcessive()
+    {
+        LOG_TRC("Should we trim our caches ?");
+        if (std::chrono::duration_cast<std::chrono::seconds>(std::chrono::steady_clock::now() -
+                                                             _lastMemTrimTime) < std::chrono::seconds(30))
+        {
+            LOG_TRC("Too soon to trim again");
+            return;
+        }
+
+        double minInactivityMs = std::numeric_limits<double>::max();
+        for (const auto& it : _sessions)
+        {
+            minInactivityMs = std::min(it.second->getInactivityMS(), minInactivityMs);
+        }
+
+        if (minInactivityMs >= 9999)
+        {
+            LOG_DBG("Trimming Core caches");
+            _loKit->trimMemory(4096);
+
+            _lastMemTrimTime = std::chrono::steady_clock::now();
+        }
+    }
+
     static void GlobalCallback(const int type, const char* p, void* data)
     {
         if (SigUtil::getTerminationFlag())
@@ -1168,10 +1195,8 @@ public:
         }
 
         // merge various callback types together if possible
-        if (type == LOK_CALLBACK_INVALIDATE_TILES ||
-            type == LOK_CALLBACK_DOCUMENT_SIZE_CHANGED)
+        if (type == LOK_CALLBACK_INVALIDATE_TILES)
         {
-            // no point in handling invalidations or page resizes per-view,
             // all views have to be in sync
             tileQueue->put("callback all " + std::to_string(type) + ' ' + payload);
         }
@@ -2108,6 +2133,9 @@ private:
     std::map<int, std::unique_ptr<CallbackDescriptor>> _viewIdToCallbackDescr;
     SessionMap<ChildSession> _sessions;
 
+    /// The timestamp of the last memory trimming.
+    std::chrono::steady_clock::time_point _lastMemTrimTime;
+
     std::map<int, std::chrono::steady_clock::time_point> _lastUpdatedAt;
     std::map<int, int> _speedCount;
     /// For showing disconnected user info in the doc repair dialog.
@@ -2343,10 +2371,15 @@ public:
             if (remainingTime < std::chrono::microseconds(timeoutMicroS))
                 _document->checkIdle();
             else
-                LOG_TRC("Poll of woudl not close gap - continuing");
+                LOG_TRC("Poll of would not close gap - continuing");
         }
 
         drainQueue();
+
+        if (_document)
+        {
+            _document->trimIfExcessive();
+        }
 
 #if !MOBILEAPP
         flushTraceEventRecordings();
@@ -3332,5 +3365,14 @@ void dump_kit_state()
     fprintf(stderr, "%s", msg.c_str());
     LOG_TRC(msg);
 }
+
+#if defined __GLIBC__
+#  include <malloc.h>
+void dump_malloc_state()
+{
+    malloc_info(0, stderr);
+    fflush(stderr);
+}
+#endif
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

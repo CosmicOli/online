@@ -18,8 +18,6 @@
 #include <FileUtil.hpp>
 #include <Png.hpp>
 
-#define ENABLE_DELTAS 1
-
 #ifndef TILE_WIRE_ID
 #  define TILE_WIRE_ID
    typedef uint32_t TileWireId;
@@ -114,6 +112,11 @@ class DeltaGenerator {
         {
             if (_rleData)
                 free(_rleData);
+        }
+
+        size_t sizeBytes()
+        {
+            return sizeof(DeltaBitmapRow) + _rleSize * 4;
         }
 
         void initRow(const uint32_t *from, unsigned int width)
@@ -273,6 +276,14 @@ class DeltaGenerator {
         const DeltaBitmapRow& getRow(int y) const
         {
             return _rows[y];
+        }
+
+        size_t sizeBytes() const
+        {
+            size_t total = sizeof(DeltaData);
+            for (int i = 0; i < _height; ++i)
+                total += _rows[i].sizeBytes();
+            return total;
         }
 
         void replaceAndFree(std::shared_ptr<DeltaData> &repl)
@@ -450,14 +461,11 @@ class DeltaGenerator {
         {
             // The tile content is identical to what the client already has, so skip it
             LOG_TRC("Identical / un-changed tile");
-            // Return a zero byte image to inform WSD we didn't need that.
-            // This allows WSD side TileCache to free up waiting subscribers.
+            // Return a zero length delta to inform WSD we didn't need that.
+            // This allows WSD side TileCache to send updates to waiting subscribers.
+            outStream.push_back('D');
             return true;
         }
-
-#if !ENABLE_DELTAS
-        return false; // Disable transmission for now; just send keyframes.
-#endif
 
         // terminating this delta so we can detect the next one.
         output.push_back('t');
@@ -505,7 +513,7 @@ class DeltaGenerator {
     /// Adapts cache sizing to the number of sessions
     void setSessionCount(size_t count)
     {
-        rebalanceDeltas(std::max(count, size_t(1)) * 48);
+        rebalanceDeltas(std::max(count, size_t(1)) * 96);
     }
 
     void dropCache()
@@ -517,8 +525,14 @@ class DeltaGenerator {
     void dumpState(std::ostream& oss)
     {
         oss << "\tdelta generator with " << _deltaEntries.size() << " entries vs. max " << _maxEntries << "\n";
+        size_t totalSize = 0;
         for (auto &it : _deltaEntries)
-            oss << "\t\t" << it->_loc._size << "," << it->_loc._part << "," << it->_loc._left << "," << it->_loc._top << " wid: " << it->getWid() << "\n";
+        {
+            size_t size = it->sizeBytes();
+            oss << "\t\t" << it->_loc._size << "," << it->_loc._part << "," << it->_loc._left << "," << it->_loc._top << " wid: " << it->getWid() << " size: " << size << "\n";
+            totalSize += size;
+        }
+        oss << "\tdelta generator consumes " << totalSize << " bytes\n";
     }
 
     /**

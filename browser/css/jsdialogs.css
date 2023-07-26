@@ -41,11 +41,6 @@
 	min-width: 400px;
 }
 
-img.ui-drawing-area {
-	width: -webkit-fill-available;
-	width: -moz-available;
-}
-
 .jsdialog.one-child-popup {
 	border: 0;
 	margin: 0 !important;
@@ -205,6 +200,7 @@ td.jsdialog > [id^='table-box']:not(.sidebar) {
 	overflow: auto;
 	max-height: 500px;
 	max-width: 700px;
+	width: max-content;
 }
 
 /* AccessibilityCheckDialog hack to prevent huge height in Firefox */
@@ -1531,7 +1527,27 @@ div [id^='TemplateDialog'] {
 	min-width: 656px;
 }
 
-/* Spellchecking dialog */
-#suggestionslb {
-	min-width: 540px;
+/* Keyboard input keys */
+kbd,
+.kbd {
+	background-color: var(--color-background-dark);
+	border-radius: var(--border-radius);
+	border: 1px solid var(--color-border-dark);
+	color: var(--color-text-dark);
+	display: inline-block;
+	font-family: monospace;
+	font-size: .85em;
+	line-height: 1;
+	padding: 4px;
+	white-space: nowrap;
+}
+
+.kbd--plus {
+	color: var(--color-text-dark);
+	padding: 0 4px;
+	font-size: 0.85em;
+}
+
+.warn-copy-paste {
+	width: 100%;
 }

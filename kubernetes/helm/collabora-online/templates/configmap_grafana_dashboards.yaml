@@ -1,5 +1,5 @@
 {{- if .Values.grafana.dashboards.enabled }}
-{{- range $path, $bytes := .Files.Glob "grafana_dashboards/*" }}
+{{- range $path, $bytes := .Files.Glob "grafana_dashboards/*.json" }}
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -8,6 +8,8 @@ metadata:
   labels:
     {{- include "collabora-online.labels" $ | nindent 4 }}
     {{- toYaml $.Values.grafana.dashboards.labels | nindent 4 }}
+  annotations:
+    {{- toYaml $.Values.grafana.dashboards.annotations | nindent 4 }}
 data:
   {{- ($.Files.Glob $path ).AsConfig | nindent 2 }}
 {{- end }}
